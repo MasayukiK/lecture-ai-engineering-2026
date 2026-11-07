@@ -5,11 +5,23 @@
 """
 
 import json
+import random
+from datetime import datetime
 from functools import cache
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+LEARNING_LOG_DIR = Path(__file__).resolve().parent.parent / "learning_log"
 MAX_RESULTS = 3
+
+
+def approval_prompt(prompt: str):
+    """承認が必要なツールに、利用者へ表示する確認文を設定する。"""
+    def decorator(func):
+        func.approval_prompt = prompt
+        return func
+
+    return decorator
 
 
 @cache
@@ -77,3 +89,37 @@ def get_lecture_summary(lecture: int) -> str:
         available = sorted(p.stem for p in (DATA_DIR / "lectures").glob("*.md"))
         return f"第{lecture}回の要点はまだありません。用意されている回: {', '.join(available)}"
     return path.read_text(encoding="utf-8")
+
+def make_quiz(lecture: int) -> str:
+    """指定した回の用語から 1つを選び、
+    確認問題と答えを返す。
+    「第2回の確認問題を出して」のように、
+    復習用の問題を求められたときに使う。
+    """
+    terms = [term for term in load_glossary() if term["lecture"] == lecture]
+    if not terms:
+        return f"第{lecture}回の用語が見つからないため、確認問題を作れません。"
+
+    term = random.choice(terms)
+    return json.dumps(
+        {
+            "question": f"「{term['term']}」の意味は？",
+            "answer": term["definition"],
+        },
+        ensure_ascii=False,
+    )
+
+
+@approval_prompt("学習記録を保存しますか？ {title} [y/N]: ")
+def save_learning_log(title: str, content: str) -> str:
+    """学習の記録を learning_log/ フォルダに保存する。
+
+    学習内容を振り返った記録を残したいときに使う。保存前に利用者の確認が必要なため、
+    エージェントには requires_approval=True で登録する。
+    """
+    LEARNING_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    path = LEARNING_LOG_DIR / f"{timestamp}.md"
+    path.write_text(f"# {title}\n\n{content}\n", encoding="utf-8")
+    return f"学習記録を保存しました: {path.relative_to(LEARNING_LOG_DIR.parent)}"
+
