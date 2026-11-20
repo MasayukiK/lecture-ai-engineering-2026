@@ -5,13 +5,25 @@
 """
 
 import json
+import random
+from datetime import datetime
 from functools import cache
 from pathlib import Path
 
 from app.config import api_error_message
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+LEARNING_LOG_DIR = Path(__file__).resolve().parent.parent / "learning_log"
 MAX_RESULTS = 3
+
+
+def approval_prompt(prompt: str):
+    """承認が必要なツールに、利用者へ表示する確認文を設定する。"""
+    def decorator(func):
+        func.approval_prompt = prompt
+        return func
+
+    return decorator
 
 
 @cache
